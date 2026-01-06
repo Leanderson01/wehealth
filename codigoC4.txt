@@ -1,0 +1,220 @@
+workspace "WeHealth Architecture" "Modelo C4 completo para o aplicativo WeHealth" { 
+!identifiers hierarchical 
+model { 
+// Pessoas / Atores 
+usuario = person "UsuarioFinal" "Busca servicos, agenda, avalia, recebe cashback e 
+notificacoes." 
+parceiro = person "Parceiro" "Gerencia pagina, promocoes e assinaturas." 
+admin = person "Administrador" "Gerencia usuarios, parceiros, denuncias e relatorios." 
+// Sistemas externos 
+googleMaps = softwareSystem "GoogleMapsAPI" "Servico externo de mapas e 
+geolocalizacao." 
+mercadoPago = softwareSystem "MercadoPago" "Processa pagamentos e assinaturas." 
+firebase = softwareSystem "FirebaseMessaging" "Envia push notifications." 
+cloudStorage = softwareSystem "CloudStorage" "Armazena imagens e videos." 
+// Sistema principal 
+wehealth = softwareSystem "WeHealth" "Aplicativo e plataforma que conecta usuarios com 
+profissionais e estabelecimentos." { 
+mobile = container "MobileApp" "App para usuarios e parceiros: busca, agendamento, 
+avaliacoes e perfil." "React Native / Flutter" 
+adminWeb = container "AdminWebApp" "Painel administrativo para equipe do WeHealth." 
+"Next.js" 
+api = container "BackendAPI" "API central que expoe logica de negocio e integracoes." 
+"Node.js / TypeScript / tRPC/REST" { 
+// 
+�
+�
+ C3 - Componentes internos do BackendAPI 
+authController = component "AuthController" "Gerencia login, registro e autenticacao de 
+usuarios." "tRPC / Express" 
+userController = component "UserController" "Gerencia dados e perfis de usuarios." "tRPC 
+/ Express" 
+partnerController = component "PartnerController" "Gerencia informacoes e promocoes de 
+parceiros." "tRPC / Express" 
+bookingController = component "BookingController" "Lida com agendamentos e 
+disponibilidade." "tRPC / Express" 
+cashbackService = component "CashbackService" "Calcula e aplica cashback nas 
+transacoes." "Service Class" 
+notificationService = component "NotificationService" "Envia notificacoes via Firebase." 
+"Service Class" 
+paymentService = component "PaymentService" "Integra com MercadoPago para 
+pagamentos e webhooks." "Service Class" 
+mediaService = component "MediaService" "Gerencia upload e recuperacao de arquivos no 
+Cloud Storage." "Service Class" 
+34 
+reportService = component "ReportService" "Gera relatorios de uso, performance e 
+faturamento." "Service Class" 
+} 
+db = container "Database" "Armazena usuarios, parceiros, servicos, avaliacoes, cashback e 
+assinaturas." "PostgreSQL" 
+auth = container "AuthService" "Autenticacao (senha + OAuth Google/Facebook) e 
+gerenciamento de sessao." "Supabase Auth / Auth0" 
+worker = container "BackgroundWorker" "Processamento assincrono: cashback, notificacoes 
+e relatorios." "Node.js / Bull" 
+media = container "MediaService" "Upload e gerenciamento de midias (imagens e videos)." 
+"Service (presigned URLs)" 
+} 
+// -------------------- 
+// RELACIONAMENTOS (MODEL) 
+// -------------------- 
+usuario -> wehealth.mobile "Usa para buscar, visualizar parceiros, agendar e avaliar" 
+parceiro -> wehealth.mobile "Usa para gerenciar pagina, promocoes e assinaturas" 
+admin -> wehealth.adminWeb "Usa para gerenciar contas, denuncias e relatorios" 
+wehealth.mobile -> wehealth.api "Consome a API para autenticacao, busca, agendamento e 
+avaliacoes" "HTTPS/JSON" 
+wehealth.adminWeb -> wehealth.api "Requisicoes administrativas: relatorios e gestao" 
+"HTTPS/JSON" 
+wehealth.api -> wehealth.db "Le e grava dados de negocio" "SQL" 
+wehealth.api -> wehealth.auth "Valida tokens e registra novos usuarios" "OAuth2 / OpenID 
+Connect" 
+wehealth.api -> googleMaps "Solicita geocoding e mapas" "HTTPS/REST" 
+wehealth.api -> mercadoPago "Cria pagamentos e processa webhooks" "HTTPS/REST" 
+wehealth.api -> firebase "Envia push notifications" "HTTPS/REST" 
+wehealth.api -> wehealth.media "Upload e gestao de midias" "HTTPS" 
+wehealth.media -> cloudStorage "Armazena e recupera arquivos" "S3/GCS API" 
+wehealth.worker -> wehealth.db "Atualiza cashback e processa jobs" "SQL" 
+mercadoPago -> wehealth.api "Webhooks de pagamento" "HTTPS/POST" 
+// -------------------- 
+// RELACIONAMENTOS de COMPONENTES (C3) 
+// -------------------- 
+wehealth.api.authController -> wehealth.auth "Valida tokens e cria usuarios" 
+wehealth.api.bookingController -> wehealth.db "Consulta disponibilidade e cria 
+agendamentos" 
+wehealth.api.partnerController -> wehealth.db "Gerencia dados de parceiros e promocoes" 
+wehealth.api.cashbackService -> wehealth.db "Atualiza saldo de cashback" 
+wehealth.api.paymentService -> mercadoPago "Cria pagamentos e recebe webhooks" 
+wehealth.api.notificationService -> firebase "Envia push notifications" 
+wehealth.api.mediaService -> cloudStorage "Upload e download de arquivos" 
+wehealth.api.reportService -> wehealth.db "Consulta dados para relatorios" 
+35 
+    // -------------------- 
+    // Relações adicionais necessárias para o fluxo C4 
+    // -------------------- 
+    usuario -> wehealth.api "Usuario inicia requisicao para a API" 
+    wehealth.api -> wehealth.auth "API valida token com AuthService" 
+    wehealth.api -> mercadoPago "API solicita pagamento a MercadoPago" 
+    mercadoPago -> wehealth.api "MercadoPago envia webhook/confirmacao a API" 
+    wehealth.api -> wehealth.db "API persiste transacoes e estados" 
+    wehealth.api -> firebase "API solicita envio de push" 
+ 
+    wehealth.api.authController -> wehealth.api.paymentService "AuthController delega criacao 
+de pagamento" 
+    wehealth.api.paymentService -> wehealth.api.cashbackService "PaymentService notifica 
+CashbackService" 
+    wehealth.api.paymentService -> wehealth.api.notificationService "PaymentService solicita 
+envio de notificacao" 
+    wehealth.api.cashbackService -> wehealth.db "CashbackService atualiza saldo na Database" 
+  } 
+ 
+  views { 
+ 
+    // C1: System Context 
+    systemContext wehealth wehealthSystemContext { 
+      title "C1 - System Context" 
+      include usuario 
+      include parceiro 
+      include admin 
+      include googleMaps 
+      include mercadoPago 
+      include firebase 
+      include cloudStorage 
+      include wehealth 
+      autoLayout lr 300 300 
+    } 
+ 
+    // C2: Container 
+    container wehealth wehealthContainerView { 
+      title "C2 - Container View" 
+      include wehealth.mobile 
+      include wehealth.adminWeb 
+      include wehealth.api 
+      include wehealth.db 
+      include wehealth.auth 
+      include wehealth.worker 
+      include wehealth.media 
+      include googleMaps 
+      include mercadoPago 
+      include firebase 
+      include cloudStorage 
+      autoLayout lr 300 300 
+36 
+} 
+// C3: Component View (API) 
+component wehealth.api wehealthComponentView { 
+title "C3 - Component View (Backend API)" 
+include wehealth.api.authController 
+include wehealth.api.userController 
+include wehealth.api.partnerController 
+include wehealth.api.bookingController 
+include wehealth.api.cashbackService 
+include wehealth.api.notificationService 
+include wehealth.api.paymentService 
+include wehealth.api.mediaService 
+include wehealth.api.reportService 
+include mercadoPago 
+include firebase 
+include cloudStorage 
+autoLayout lr 300 300 
+} 
+// ===== TWO DYNAMIC VIEWS ===== 
+// Dynamic A: Fluxo entre PERSONS e CONTAINERS (escopo = software system) 
+dynamic wehealth wehealthContainerFlow { 
+title "C4 - Fluxo (Pessoa -> Containers)" 
+description "Fluxo de autenticação e pagamento (visao externa entre Pessoa e Containers)." 
+usuario -> wehealth.api "1. Usuario faz requisicao à API (login/checkout)" 
+wehealth.api -> wehealth.auth "2. API valida token com AuthService" 
+wehealth.api -> mercadoPago "3. API solicita pagamento a MercadoPago" 
+mercadoPago -> wehealth.api "4. MercadoPago confirma pagamento via webhook" 
+wehealth.api -> wehealth.db "5. API persiste transacao/estado" 
+wehealth.api -> firebase "6. API solicita envio de notificacao via Firebase" 
+autoLayout lr 300 300 
+} 
+// Dynamic B: Fluxo interno entre COMPONENTS (escopo = container wehealth.api) 
+dynamic wehealth.api wehealthApiComponentFlow { 
+title "C4 - Fluxo Interno (Components do BackendAPI)" 
+description "Sequencia interna entre componentes do BackendAPI (sem persons)." 
+wehealth.api.authController -> wehealth.api.paymentService "1. AuthController delega 
+criacao de pagamento" 
+wehealth.api.paymentService -> wehealth.api.cashbackService "2. PaymentService notifica 
+CashbackService" 
+wehealth.api.paymentService -> wehealth.api.notificationService "3. PaymentService 
+solicita envio de notificacao" 
+wehealth.api.cashbackService -> wehealth.db "4. CashbackService atualiza saldo na 
+Database" 
+37 
+wehealth.api.paymentService -> mercadoPago "5. PaymentService envia requisicao de 
+pagamento" 
+mercadoPago -> wehealth.api.paymentService "6. MercadoPago retorna confirmacao ao 
+PaymentService" 
+wehealth.api.paymentService -> wehealth.api.notificationService "7. PaymentService pede 
+envio de notificacao (após confirmacao)" 
+wehealth.api.notificationService -> firebase "8. NotificationService envia push via Firebase" 
+// aumenta espaçamento entre ranks e nós para melhor visualização 
+autoLayout lr 600 500 
+} 
+// Estilos visuais 
+styles { 
+element "Person" { 
+background #08427b 
+color #ffffff 
+shape person 
+} 
+element "Software System" { 
+background #1168bd 
+color #ffffff 
+} 
+element "Container" { 
+background #438dd5 
+color #ffffff 
+} 
+element "Component" { 
+background #85bbf0 
+color #000000 
+} 
+element "External" { 
+background #999999 
+color #ffffff 
+} 
+} 
+} 
+} 
